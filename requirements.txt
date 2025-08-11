@@ -1,6 +1,10 @@
+
+
 flask
-pandas
+flask-cors
 scikit-learn
+pandas
+matplotlib
+seaborn
 xgboost
 gunicorn
-flask_cors
