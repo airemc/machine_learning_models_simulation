@@ -11,6 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.naive_bayes import GaussianNB
+import os
 
 try:
     from xgboost import XGBClassifier
@@ -184,4 +185,6 @@ def train_model():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8000)
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
+
