@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score, f1_score
@@ -24,6 +24,19 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
+# -------------------
+# Ana sayfa (web arayüzü)
+# -------------------
+@app.route('/', methods=['GET'])
+def home():
+    models = ['decision_tree', 'knn', 'logistic', 'random_forest', 'svm', 'nb']
+    if xgboost_available:
+        models.append('xgboost')
+    return render_template('index.html', models=models)
+
+# -------------------
+# Train route (API ve web)
+# -------------------
 @app.route('/train', methods=['POST'])
 def train_model():
     try:
@@ -58,7 +71,6 @@ def train_model():
             X[cat_cols] = pd.DataFrame(cat_imputer.fit_transform(X[cat_cols]), columns=cat_cols)
 
         X = pd.get_dummies(X, columns=cat_cols)
-
         stratify_arg = y if binary_classification else None
 
         X_train, X_test, y_train, y_test = train_test_split(
@@ -66,81 +78,43 @@ def train_model():
         )
 
         model = None
+        scaler = None
 
+        # -------------------
+        # Model seçimi ve parametreleri
+        # -------------------
         if selected_model == 'logistic':
-            try:
-                C = float(request.form.get('C', 1.0))
-            except ValueError:
-                return jsonify({'error': 'C parametresi sayı olmalıdır.'}), 400
+            C = float(request.form.get('C', 1.0))
             penalty = request.form.get('penalty', 'l2')
             solver = request.form.get('solver', 'lbfgs')
-
             if penalty == 'l1' and solver not in ['liblinear', 'saga']:
                 return jsonify({'error': 'L1 penalty için solver liblinear veya saga olmalıdır.'}), 400
-
             model = LogisticRegression(max_iter=1000, class_weight='balanced', C=C, penalty=penalty, solver=solver)
             scaler = StandardScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform(X_test)
 
         elif selected_model == 'svm':
-            try:
-                C = float(request.form.get('C', 1.0))
-            except ValueError:
-                return jsonify({'error': 'C parametresi sayı olmalıdır.'}), 400
-
+            C = float(request.form.get('C', 1.0))
             kernel = request.form.get('kernel', 'rbf')
-
             gamma_val = request.form.get('gamma', 'scale')
             if gamma_val not in ['scale', 'auto']:
-                try:
-                    gamma_val = float(gamma_val)
-                except ValueError:
-                    return jsonify({'error': 'Gamma parametresi "scale", "auto" veya float sayı olmalıdır.'}), 400
-
-            model = SVC(class_weight='balanced', C=C, kernel=kernel, gamma=gamma_val)
+                gamma_val = float(gamma_val)
+            model = SVC(class_weight='balanced', C=C, kernel=kernel, gamma=gamma_val, probability=True)
             scaler = StandardScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform(X_test)
 
         elif selected_model == 'random_forest':
-            try:
-                n_estimators = int(request.form.get('n_estimators', 100))
-            except ValueError:
-                return jsonify({'error': 'n_estimators parametresi tam sayı olmalıdır.'}), 400
-
-            max_depth_val = request.form.get('max_depth')
-            if max_depth_val:
-                try:
-                    max_depth = int(max_depth_val)
-                except ValueError:
-                    return jsonify({'error': 'max_depth parametresi tam sayı veya boş olmalıdır.'}), 400
-            else:
-                max_depth = None
-
+            n_estimators = int(request.form.get('n_estimators', 100))
+            max_depth = request.form.get('max_depth')
+            max_depth = int(max_depth) if max_depth else None
             model = RandomForestClassifier(n_estimators=n_estimators, max_depth=max_depth)
 
         elif selected_model == 'knn':
-            try:
-                n_neighbors = int(request.form.get('n_neighbors', 5))
-            except ValueError:
-                return jsonify({'error': 'n_neighbors parametresi tam sayı olmalıdır.'}), 400
-
+            n_neighbors = int(request.form.get('n_neighbors', 5))
             weights = request.form.get('weights', 'uniform')
-            if weights not in ['uniform', 'distance']:
-                return jsonify({'error': 'weights parametresi "uniform" veya "distance" olmalıdır.'}), 400
-
             model = KNeighborsClassifier(n_neighbors=n_neighbors, weights=weights)
             scaler = StandardScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform(X_test)
 
         elif selected_model == 'nb':
-            try:
-                var_smoothing = float(request.form.get('var_smoothing', 1e-9))
-            except ValueError:
-                return jsonify({'error': 'var_smoothing parametresi sayı olmalıdır.'}), 400
-
+            var_smoothing = float(request.form.get('var_smoothing', 1e-9))
             model = GaussianNB(var_smoothing=var_smoothing)
 
         elif selected_model == 'xgboost':
@@ -155,6 +129,14 @@ def train_model():
         else:
             return jsonify({'error': f'Geçersiz model türü: {selected_model}'}), 400
 
+        # Ölçekleme gerekiyorsa
+        if scaler:
+            X_train = scaler.fit_transform(X_train)
+            X_test = scaler.transform(X_test)
+
+        # -------------------
+        # Model eğitimi ve skorlar
+        # -------------------
         model.fit(X_train, y_train)
         y_pred = model.predict(X_test)
 
@@ -167,6 +149,9 @@ def train_model():
         recall = recall_score(y_test, y_pred, average=average_type, zero_division=0)
         f1 = f1_score(y_test, y_pred, average=average_type, zero_division=0)
 
+        # -------------------
+        # Tek sayfa için JSON dön
+        # -------------------
         return jsonify({
             'accuracy': round(acc, 4),
             'confusion_matrix': cm.tolist(),
@@ -185,5 +170,5 @@ def train_model():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host='0.0.0.0', port=8000, debug=True)
 

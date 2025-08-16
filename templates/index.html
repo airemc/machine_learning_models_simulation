@@ -1,179 +1,132 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Makine Öğrenmesi Testi</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<title>ML Model Trainer</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <h1>Makine Öğrenmesi Sınıflandırıcı Testi</h1>
+<div class="container">
+    <h2>Machine Learning Model Trainer</h2>
+    <form id="trainForm">
+        <div>
+            <label>Upload CSV File</label>
+            <input type="file" name="file" required>
+        </div>
+        <div>
+            <label>Target Column (optional)</label>
+            <input type="text" name="target" placeholder="Leave empty for last column">
+        </div>
+        <div>
+            <label>Choose Model</label>
+            <select name="model" id="modelSelect" required>
+                {% for m in models %}
+                <option value="{{ m }}">{{ m.replace('_',' ').title() }}</option>
+                {% endfor %}
+            </select>
+        </div>
 
-  <form id="uploadForm" enctype="multipart/form-data">
-    <input type="file" name="file" required />
-    <input type="text" name="target" placeholder="Hedef sütun adı" />
+        <div id="params">
+            <div id="logisticParams">
+                <label>C (Logistic Regression)</label>
+                <input type="number" step="any" name="C" value="1.0">
+                <label>Penalty</label>
+                <select name="penalty">
+                    <option value="l2">l2</option>
+                    <option value="l1">l1</option>
+                </select>
+                <label>Solver</label>
+                <select name="solver">
+                    <option value="lbfgs">lbfgs</option>
+                    <option value="liblinear">liblinear</option>
+                    <option value="saga">saga</option>
+                </select>
+            </div>
+            <div id="svmParams">
+                <label>C (SVM)</label>
+                <input type="number" step="any" name="C" value="1.0">
+                <label>Kernel</label>
+                <select name="kernel">
+                    <option value="rbf">rbf</option>
+                    <option value="linear">linear</option>
+                    <option value="poly">poly</option>
+                    <option value="sigmoid">sigmoid</option>
+                </select>
+                <label>Gamma</label>
+                <input type="text" name="gamma" value="scale">
+            </div>
+            <div id="rfParams">
+                <label>Number of Estimators (Random Forest)</label>
+                <input type="number" name="n_estimators" value="100">
+                <label>Max Depth</label>
+                <input type="number" name="max_depth">
+            </div>
+            <div id="knnParams">
+                <label>Number of Neighbors (KNN)</label>
+                <input type="number" name="n_neighbors" value="5">
+                <label>Weights</label>
+                <select name="weights">
+                    <option value="uniform">uniform</option>
+                    <option value="distance">distance</option>
+                </select>
+            </div>
+            <div id="nbParams">
+                <label>Var Smoothing (Naive Bayes)</label>
+                <input type="number" step="any" name="var_smoothing" value="1e-9">
+            </div>
+        </div>
 
-    <select name="model" id="modelSelect" onchange="showParams()">
-      <option value="decision_tree">Decision Tree</option>
-      <option value="knn">KNN</option>
-      <option value="logistic">Logistic Regression</option>
-      <option value="random_forest">Random Forest</option>
-      <option value="svm">SVM</option>
-      <option value="nb">Naive Bayes</option>
-      <option value="xgboost">XGBoost</option>
-    </select>
+        <button type="submit">Train Model</button>
+    </form>
 
-    <div id="params"></div>
+    <div id="results"></div>
+</div>
 
-    <label>
-      <input type="checkbox" name="binary_classification" />
-      Veri kümesi ikili sınıflama mı?
-    </label>
+<script>
+const modelSelect = document.getElementById('modelSelect');
+const paramsDivs = {
+    logistic: document.getElementById('logisticParams'),
+    svm: document.getElementById('svmParams'),
+    random_forest: document.getElementById('rfParams'),
+    knn: document.getElementById('knnParams'),
+    nb: document.getElementById('nbParams')
+};
 
-    <button type="submit">Modeli Eğit</button>
-  </form>
-
-  <hr />
-
-  <h2>Sonuçlar</h2>
-  <pre id="output"></pre>
-  <canvas id="confusionMatrixChart" width="400" height="400"></canvas>
-
-  <script>
-    function showParams() {
-      const model = document.getElementById('modelSelect').value;
-      const paramsDiv = document.getElementById('params');
-      paramsDiv.innerHTML = '';
-
-      if (model === 'logistic') {
-        paramsDiv.innerHTML = `
-          <label>C:</label>
-          <input type="number" step="0.01" name="C" value="1.0" />
-          <label>Penalty:</label>
-          <select name="penalty">
-            <option value="l2">l2</option>
-            <option value="l1">l1</option>
-          </select>
-          <label>Solver:</label>
-          <select name="solver">
-            <option value="lbfgs">lbfgs</option>
-            <option value="liblinear">liblinear</option>
-            <option value="saga">saga</option>
-          </select>
-        `;
-      } else if (model === 'svm') {
-        paramsDiv.innerHTML = `
-          <label>C:</label>
-          <input type="number" step="0.01" name="C" value="1.0" />
-          <label>Kernel:</label>
-          <select name="kernel">
-            <option value="rbf">rbf</option>
-            <option value="linear">linear</option>
-            <option value="poly">poly</option>
-          </select>
-          <label>Gamma:</label>
-          <input type="text" name="gamma" value="scale" />
-        `;
-      } else if (model === 'random_forest') {
-        paramsDiv.innerHTML = `
-          <label>n_estimators:</label>
-          <input type="number" name="n_estimators" value="100" />
-          <label>max_depth:</label>
-          <input type="number" name="max_depth" />
-        `;
-      } else if (model === 'knn') {
-        paramsDiv.innerHTML = `
-          <label>n_neighbors:</label>
-          <input type="number" name="n_neighbors" value="5" />
-          <label>weights:</label>
-          <select name="weights">
-            <option value="uniform">uniform</option>
-            <option value="distance">distance</option>
-          </select>
-        `;
-      } else if (model === 'nb') {
-        paramsDiv.innerHTML = `
-          <label>var_smoothing:</label>
-          <input type="number" step="1e-10" name="var_smoothing" value="1e-9" />
-        `;
-      }
-      // XGBoost ve Decision Tree için parametre eklemedik ama istersen ekleyebiliriz
+function showParams() {
+    const model = modelSelect.value;
+    for (const key in paramsDivs) {
+        paramsDivs[key].style.display = (key === model) ? 'block' : 'none';
     }
+}
 
-    document.getElementById('uploadForm').addEventListener('submit', async function (event) {
-      event.preventDefault();
+showParams();
+modelSelect.addEventListener('change', showParams);
 
-      const form = event.target;
-      const formData = new FormData(form);
+document.getElementById('trainForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    formData.append('web','false');
+    const res = await fetch('/train', { method: 'POST', body: formData });
+    const data = await res.json();
 
-      // checkbox özel: yoksa formData'ya eklenmez, burada manuel ekleyelim
-      if (!form.binary_classification.checked) {
-        formData.set('binary_classification', 'false');
-      } else {
-        formData.set('binary_classification', 'true');
-      }
-
-      try {
-        const response = await fetch('http://127.0.0.1:8000/train', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) {
-          throw new Error('Sunucu hatası');
-        }
-
-        const result = await response.json();
-
-        document.getElementById('output').textContent =
-          `Kullanılan Model: ${result.model_used}
-Hedef Sütun: ${result.used_target}
-Doğruluk: ${result.accuracy}
-Precision: ${result.precision}
-Recall: ${result.recall}
-F1 Score: ${result.f1_score}
-Özellikler: ${result.features_used.join(', ')}
-Confusion Matrix:
-${JSON.stringify(result.confusion_matrix, null, 2)}
-`;
-
-        const cm = result.confusion_matrix;
-        const ctx = document.getElementById('confusionMatrixChart').getContext('2d');
-
-        if (window.confusionChart) {
-          window.confusionChart.destroy();
-        }
-
-        if (cm.length === 2 && cm[0].length === 2) {
-          window.confusionChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-              labels: ['True Negative', 'False Positive', 'False Negative', 'True Positive'],
-              datasets: [{
-                label: 'Değerler',
-                data: [cm[0][0], cm[0][1], cm[1][0], cm[1][1]],
-                backgroundColor: ['#4e79a7', '#f28e2b', '#e15759', '#76b7b2']
-              }]
-            },
-            options: {
-              responsive: true,
-              scales: {
-                y: { beginAtZero: true }
-              }
-            }
-          });
-        }
-
-      } catch (error) {
-        document.getElementById('output').textContent = 'Hata oluştu: ' + error.message;
-        console.error(error);
-      }
-    });
-
-    // Sayfa yüklendiğinde parametre alanlarını göster
-    document.addEventListener('DOMContentLoaded', () => {
-      showParams();
-    });
-  </script>
+    const resultsDiv = document.getElementById('results');
+    if (data.error) {
+        resultsDiv.innerHTML = `<p style="color:red;font-weight:bold;">${data.error}</p>`;
+    } else {
+        resultsDiv.innerHTML = `
+            <h3>Results</h3>
+            <p><strong>Model Used:</strong> ${data.model_used}</p>
+            <p><strong>Target Column:</strong> ${data.used_target}</p>
+            <p><strong>Features Used:</strong> ${data.features_used.join(', ')}</p>
+            <p><strong>Accuracy:</strong> ${data.accuracy}</p>
+            <p><strong>Precision:</strong> ${data.precision}</p>
+            <p><strong>Recall:</strong> ${data.recall}</p>
+            <p><strong>F1 Score:</strong> ${data.f1_score}</p>
+            <h4>Confusion Matrix:</h4>
+            <pre>${JSON.stringify(data.confusion_matrix,null,2)}</pre>
+        `;
+    }
+});
+</script>
 </body>
 </html>
