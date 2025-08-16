@@ -28,15 +28,19 @@ An interactive web platform that allows users to upload CSV datasets and test va
 
 1. Clone the repository:
 bash
+
 git clone https://github.com/airemc/machine_learning_models_simulation.git
 
 2.Navigate to the project directory:
+
 cd machine_learning_models_simulation
 
 3.Install required dependencies:
+
 pip install -r requirements.txt
 
 4.Run the Flask application:
+
 python app.py
 
 
