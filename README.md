@@ -27,7 +27,7 @@ An interactive web platform that allows users to upload CSV datasets and test va
 ## Installation
 
 1. Clone the repository:
-```bash
+bash
 git clone https://github.com/airemc/machine_learning_models_simulation.git
 
 2.Navigate to the project directory:
